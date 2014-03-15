@@ -9,7 +9,24 @@
 
   <name>sign4j-java</name>
   <url>http://maven.apache.org</url>
-
+  <build>		
+	<plugins>                    
+		<plugin>
+		    <groupId>org.apache.maven.plugins</groupId>
+	        <artifactId>maven-jar-plugin</artifactId>
+	        <version>2.4</version>
+	        <configuration>
+	            <archive>
+	                <index>true</index>
+	                <manifest>
+	                    <addClasspath>true</addClasspath>
+	                    <mainClass>net.rarobertson.sign4j.java.App</mainClass>
+	                </manifest>            
+	            </archive>
+	        </configuration>      
+	    </plugin>              	   
+     </plugins>	
+   </build>
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
   </properties>
