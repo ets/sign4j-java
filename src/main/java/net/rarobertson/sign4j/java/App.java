@@ -1,10 +1,6 @@
 package net.rarobertson.sign4j.java;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.IOException;
+import java.io.*;
 
 public class App
 {
@@ -94,7 +90,7 @@ public class App
 		}
 		
 		// Buffer for reading from file, smallest possible buffer we can get away with
-		byte[] buffer = new byte[END_HEADER_SIZE + MAX_COMMENT_SIZE < originalLength ? END_HEADER_SIZE + MAX_COMMENT_SIZE : originalLength];
+		byte[] buffer = new byte[END_HEADER_SIZE + MAX_COMMENT_SIZE < originalLength ? END_HEADER_SIZE + MAX_COMMENT_SIZE: originalLength];
 		// Initialize so we know if we found one
 		int commentLength = -1;
 		// Initialize because Java doesn't realize I'm assigning it or exiting so gives a compiler error
@@ -103,24 +99,28 @@ public class App
 		// Locate the ZIP 'end of central directory' header and find the comment-length value
 		try
 		{
+			System.out.println("reading from "+(inputFile.length() - buffer.length)+" to "+inputFile.length()+" total="+buffer.length);
 			inputStream.getChannel().position(inputFile.length() - buffer.length);
 			inputStream.read(buffer, 0, buffer.length);
-			for (int p = buffer.length - END_HEADER_SIZE - 1; p >= 0; p--)
-				if (segmentMatch(buffer, p, ZIP_END_HEADER))
-				{
-					commentLength = getShort(buffer, p + END_HEADER_SIZE - 2);
+			for (int p = buffer.length - END_HEADER_SIZE; p >= 0; p--) {
+				if (segmentMatch(buffer, p, ZIP_END_HEADER)){				
+					commentLength = getShort(buffer, p + END_HEADER_SIZE - 2);				
 					if (commentLength == buffer.length - (p + END_HEADER_SIZE))
 					{
 						offset = (int)(inputFile.length() - buffer.length + p + END_HEADER_SIZE - 2);
+						System.out.println("Breaking with offset of "+offset);						
 						break;
 					}
-					else
-						commentLength = -1;
-				}
-			if (commentLength == -1)
-			{
-				System.out.println("ZIP ending header not found");
-				System.out.println("This file probably doesn't contain a JAR");
+					else{
+						commentLength = -2;
+					}
+			    }	
+			}
+			if (commentLength <= -2) {
+				System.out.println("Unexpected comment length.");
+				return;				
+			}else if (commentLength <= -1) {
+				System.out.println("ZIP ending header not found so this file probably doesn't contain a JAR");
 				return;
 			}
 		}
@@ -138,7 +138,7 @@ public class App
 			}
 			catch (Exception ex)
 			{
-				// Good job Java. You failed to close a file that was only being read
+				System.err.println("Good job Java. You failed to close a file that was only being read.");			
 			}
 		}
 		
@@ -157,7 +157,8 @@ public class App
 		
 		try
 		{
-			outputStream = new FileOutputStream(inputFile);
+			File outputFile = new File(inputFile.getAbsolutePath());
+			outputStream = new FileOutputStream(outputFile);
 		}
 		catch (IOException ex)
 		{
@@ -167,10 +168,13 @@ public class App
 		}
 		
 		// Change the ZIP end header to pretend the signed data added to the end is part of the ZIP comment
+		byte[] newbytes;
 		try
 		{
 			outputStream.getChannel().position(offset);
-			outputStream.write(getShort((short)(commentLength + inputFile.length() - originalLength)));
+			newbytes = getShort((short)(commentLength + inputFile.length() - originalLength));
+			System.out.println("Set position in outputstream to "+offset+" about to write byte buffer of length "+newbytes.length);
+			outputStream.write(newbytes);
 		}
 		catch (IOException ex)
 		{
@@ -194,7 +198,7 @@ public class App
 		
 		if (verbose)
 		{
-			System.out.println(">Wrote two bytes to file");
+			System.out.println(">Wrote "+newbytes.length+" bytes to file");
 			System.out.println(">Finished");
 		}
 	}
@@ -229,13 +233,28 @@ public class App
 		ret[1] = (byte)(value | 0xFF);
 		return ret;
 	}
-	
+	   private static final int BUFFER_SIZE = 8192;
+       public static long copy(java.io.InputStream is, java.io.OutputStream os) {
+           byte[] buf = new byte[BUFFER_SIZE];
+           long total = 0;
+           int len = 0;
+           try {
+               while (-1 != (len = is.read(buf))) {
+                   os.write(buf, 0, len);
+                   total += len;
+               }
+           } catch (IOException ioe) {
+               throw new RuntimeException("error reading stream", ioe);
+           }
+           return total;
+       }
 	// Like C's system function
 	private static int system(String command)
 	{
 		try
 		{
-			Process process = Runtime.getRuntime().exec(command);
+			Process process = Runtime.getRuntime().exec(command);			
+			copy(process.getInputStream(),System.out);
 			process.waitFor();
 			return process.exitValue();
 		}
@@ -245,5 +264,6 @@ public class App
 			System.out.println(ex.toString());
 			return -1;
 		}
-	}
+	}	
+
 }
